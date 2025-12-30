@@ -122,24 +122,18 @@ def predict(text: str):
 # =========================
 # 테스트 실행
 # =========================
-tests = [
-    "홍길동",
-    "주임",
-    "네이버",
-    "ㅇㄴㅁㄹㄴㅇㄹ",
-    "삼성전자",
-    "차장",
-    "차은우",
-    "구마유시",
-    "선우정아",
-    "LG전자",
-    "한화손해보험",
-    "HP Enterprise",
-    "롯데정보통신",
-    "삼성SDI",
-    "토스",
-]
 
-print("\n🧪 테스트 결과")
-for t in tests:
-    print(f"{t} → {predict(t)}")
+name_test_set = pd.read_csv("test_data_set/name_test_data.csv", header=None, names=["text"])
+name_test_set["label"] = "NAME"
+
+company_test_set = pd.read_csv("test_data_set/company_test_data.csv", header=None, names=["text"])
+company_test_set["label"] = "COMPANY"
+
+position_test_set = pd.read_csv("test_data_set/position_test_data.csv", header=None, names=["text"])
+position_test_set["label"] = "POSITION"
+
+print("\n 테스트 결과")
+for df in [name_test_set, company_test_set, position_test_set]:
+    for text, label in zip(df["text"], df["label"]):
+        result = predict(text)
+        print(f"{text} ({label}) → {result}")
