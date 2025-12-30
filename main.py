@@ -1,4 +1,6 @@
 import torch
+import pandas as pd
+
 from datasets import Dataset
 from transformers import (
     AutoTokenizer,
@@ -14,34 +16,6 @@ label_list = ["O", "NAME", "POSITION", "COMPANY"]
 label2id = {l: i for i, l in enumerate(label_list)}
 id2label = {i: l for l, i in label2id.items()}
 
-# =========================
-# 학습 데이터
-# =========================
-train_data = [
-    # 이름
-    {"text": "홍길동", "label": "NAME"},
-    {"text": "김철수", "label": "NAME"},
-    {"text": "이영희", "label": "NAME"},
-
-    # 회사
-    {"text": "네이버", "label": "COMPANY"},
-    {"text": "카카오", "label": "COMPANY"},
-    {"text": "삼성전자", "label": "COMPANY"},
-
-    # 직급
-    {"text": "주임", "label": "POSITION"},
-    {"text": "대리", "label": "POSITION"},
-    {"text": "과장", "label": "POSITION"},
-    {"text": "차장", "label": "POSITION"},
-    {"text": "팀장", "label": "POSITION"},
-
-    # 미분류
-    {"text": "ㅇㄴㅁㄹㄴㅇㄹ", "label": "O"},
-    {"text": "asdf123", "label": "O"},
-    {"text": "010-1234-5678", "label": "O"},
-]
-
-dataset = Dataset.from_list(train_data)
 
 # =========================
 # 토크나이저
@@ -59,9 +33,25 @@ def tokenize(example):
     tokenized["label"] = label2id[example["label"]]
     return tokenized
 
-dataset = dataset.map(tokenize)
+# =========================
+# 학습 데이터
+# =========================
+import pandas as pd
+from datasets import Dataset
+
+# CSV 읽기
+df = pd.read_csv("train_data.csv")
+
+# Dataset 객체로 변환
+dataset = Dataset.from_pandas(df)
+
+# tokenize 적용
+dataset = dataset.map(tokenize, batched=False)
+
+# text 컬럼 제거, label은 그대로
 dataset = dataset.remove_columns(["text"])
 dataset.set_format("torch")
+
 
 # =========================
 # 모델
@@ -127,7 +117,6 @@ tests = [
     "삼성전자",
     "차장",
     "차은우",
-    ""
     "구마유시",
     "선우정아",
     "LG전자",
