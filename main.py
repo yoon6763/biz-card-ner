@@ -1,74 +1,143 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForTokenClassification
+from datasets import Dataset
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    Trainer,
+    TrainingArguments
+)
 
-# ------------------------------
-# 후처리용 유틸
-# ------------------------------
-def merge_subwords(token_label_list):
-    """##로 시작하는 subword 토큰 합치기"""
-    merged_tokens = []
-    current_token, current_label = "", None
+# =========================
+# 1라벨 정의
+# =========================
+label_list = ["O", "NAME", "POSITION", "COMPANY"]
+label2id = {l: i for i, l in enumerate(label_list)}
+id2label = {i: l for l, i in label2id.items()}
 
-    for token, label in token_label_list:
-        if token in ["[CLS]", "[SEP]"]:
-            continue
+# =========================
+# 학습 데이터
+# =========================
+train_data = [
+    # 이름
+    {"text": "홍길동", "label": "NAME"},
+    {"text": "김철수", "label": "NAME"},
+    {"text": "이영희", "label": "NAME"},
 
-        if token.startswith("##"):
-            current_token += token[2:]
-        else:
-            if current_token:
-                merged_tokens.append((current_token, current_label))
-            current_token, current_label = token, label
+    # 회사
+    {"text": "네이버", "label": "COMPANY"},
+    {"text": "카카오", "label": "COMPANY"},
+    {"text": "삼성전자", "label": "COMPANY"},
 
-    if current_token:
-        merged_tokens.append((current_token, current_label))
+    # 직급
+    {"text": "주임", "label": "POSITION"},
+    {"text": "대리", "label": "POSITION"},
+    {"text": "과장", "label": "POSITION"},
+    {"text": "차장", "label": "POSITION"},
+    {"text": "팀장", "label": "POSITION"},
 
-    return merged_tokens
+    # 미분류
+    {"text": "ㅇㄴㅁㄹㄴㅇㄹ", "label": "O"},
+    {"text": "asdf123", "label": "O"},
+    {"text": "010-1234-5678", "label": "O"},
+]
 
-# ------------------------------
-# NER 모델 불러오기
-# ------------------------------
-MODEL_NAME = "distilbert-base-multilingual-cased"
+dataset = Dataset.from_list(train_data)
+
+# =========================
+# 토크나이저
+# =========================
+MODEL_NAME = "klue/bert-base"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForTokenClassification.from_pretrained(MODEL_NAME)
 
-# ------------------------------
-# NER 추론 함수
-# ------------------------------
-def ner_predict(texts):
-    results = []
+def tokenize(example):
+    tokenized = tokenizer(
+        example["text"],
+        padding="max_length",
+        truncation=True,
+        max_length=16
+    )
+    tokenized["label"] = label2id[example["label"]]
+    return tokenized
 
-    for text in texts:
-        inputs = tokenizer(
-            text.split(),
-            return_tensors="pt",
-            is_split_into_words=True
-        )
+dataset = dataset.map(tokenize)
+dataset = dataset.remove_columns(["text"])
+dataset.set_format("torch")
 
-        with torch.no_grad():
-            outputs = model(**inputs)
+# =========================
+# 모델
+# =========================
+model = AutoModelForSequenceClassification.from_pretrained(
+    MODEL_NAME,
+    num_labels=len(label_list),
+    id2label=id2label,
+    label2id=label2id
+)
 
-        predictions = torch.argmax(outputs.logits, dim=-1)[0]
-        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
-        labels = [model.config.id2label[p.item()] for p in predictions]
+# =========================
+# 학습 설정
+# =========================
+training_args = TrainingArguments(
+    output_dir="./cls_model",
+    per_device_train_batch_size=8,
+    num_train_epochs=10,
+    logging_steps=5,
+    save_strategy="no",
+    report_to="none"
+)
 
-        merged = merge_subwords(list(zip(tokens, labels)))
-        results.append(merged)
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset,
+    tokenizer=tokenizer
+)
 
-    return results
+# =========================
+# 학습
+# =========================
+trainer.train()
+print("학습 완료")
 
-# ------------------------------
-# main
-# ------------------------------
-if __name__ == "__main__":
-    ocr_text = """김철수
-테스트컴퍼니"""
+# =========================
+# 테스트 함수
+# =========================
+def predict(text: str):
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        padding=True,
+        max_length=16
+    )
 
-    ner_input = [line.strip() for line in ocr_text.split("\n") if line.strip()]
-    print("NER input:", ner_input)
+    with torch.no_grad():
+        outputs = model(**inputs)
 
-    # NER 추론
-    ner_results = ner_predict(ner_input)
-    print("NER results:")
-    for line, result in zip(ner_input, ner_results):
-        print(f"- {line} → {result}")
+    pred_id = torch.argmax(outputs.logits, dim=-1).item()
+    return id2label[pred_id]
+
+# =========================
+# 테스트 실행
+# =========================
+tests = [
+    "홍길동",
+    "주임",
+    "네이버",
+    "ㅇㄴㅁㄹㄴㅇㄹ",
+    "삼성전자",
+    "차장",
+    "차은우",
+    ""
+    "구마유시",
+    "선우정아",
+    "LG전자",
+    "한화손해보험",
+    "HP Enterprise",
+    "롯데정보통신",
+    "삼성SDI",
+    "토스",
+]
+
+print("\n🧪 테스트 결과")
+for t in tests:
+    print(f"{t} → {predict(t)}")
