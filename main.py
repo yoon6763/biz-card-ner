@@ -136,4 +136,4 @@ print("\n 테스트 결과")
 for df in [name_test_set, company_test_set, position_test_set]:
     for text, label in zip(df["text"], df["label"]):
         result = predict(text)
-        print(f"{text} ({label}) → {result}")
+        print(f"{text} ({label}) → {result} | 맞음: {result == label}")
