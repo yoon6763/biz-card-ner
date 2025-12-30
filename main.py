@@ -39,11 +39,24 @@ def tokenize(example):
 import pandas as pd
 from datasets import Dataset
 
-# CSV 읽기
-df = pd.read_csv("train_data.csv")
+# CSV 읽기 (라벨 컬럼 없음)
+df_name = pd.read_csv("train_data_set/name_train_data.csv", header=None, names=["text"])
+df_name["label"] = "NAME"
 
-# Dataset 객체로 변환
-dataset = Dataset.from_pandas(df)
+df_company = pd.read_csv("train_data_set/company_train_data.csv", header=None, names=["text"])
+df_company["label"] = "COMPANY"
+
+df_position = pd.read_csv("train_data_set/position_train_data.csv", header=None, names=["text"])
+df_position["label"] = "POSITION"
+
+df_o = pd.read_csv("train_data_set/other_train_data.csv", header=None, names=["text"])
+df_o["label"] = "O"
+
+# 합치기
+df_train = pd.concat([df_name, df_company, df_position, df_o], ignore_index=True)
+
+# Dataset 변환
+dataset = Dataset.from_pandas(df_train)
 
 # tokenize 적용
 dataset = dataset.map(tokenize, batched=False)
